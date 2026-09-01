@@ -8,22 +8,22 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 )
 
-type CryptService struct{
+type CipherService struct{
 	aead cipher.AEAD
 }
 
-func New(key []byte) (*CryptService, error) { 
+func New(key []byte) (*CipherService, error) { 
 	aead, err := chacha20poly1305.New(key)
 	if err != nil { 
 		return nil, fmt.Errorf("create cipher: %w", err)
 	}
 
-	return &CryptService{
+	return &CipherService{
 		aead: aead,
 	}, nil
 }
 
-func (s *CryptService) Encrypt(text []byte) ([]byte, error) { 
+func (s *CipherService) Encrypt(text []byte) ([]byte, error) { 
 	nonce := make([]byte, s.aead.NonceSize())
 
 	if _, err := rand.Read(nonce); err != nil { 
@@ -34,7 +34,7 @@ func (s *CryptService) Encrypt(text []byte) ([]byte, error) {
 	return append(nonce, cipheredText...), nil
 }
 
-func (s *CryptService) Decrypt(packet []byte) ([]byte, error) { 
+func (s *CipherService) Decrypt(packet []byte) ([]byte, error) { 
 	nonceSize := s.aead.NonceSize()
 
 	if len(packet) < nonceSize { 
