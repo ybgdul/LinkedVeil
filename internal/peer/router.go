@@ -15,7 +15,7 @@ type Router struct{
 	routes []Route
 }
 
-func (r *Router) LookUpID(ip netip.Addr) (*Peer, error) { 
+func (r *Router) LookUpIP(ip netip.Addr) (*Peer, error) { 
 	for _, route := range r.routes {
 		if route.Network.Contains(ip) { 
 			p, ok := r.peers.Get(route.PeerID)

@@ -1,6 +1,7 @@
 package peer
 
 import (
+	"net"
 	"net/netip"
 	"sync"
 )
@@ -32,8 +33,8 @@ func (m *Manager) Get(id ID) (*Peer, bool){
 }
 
 func (m *Manager) Remove(id ID){ 
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	delete(m.peers, id)
 }
@@ -47,6 +48,20 @@ func (m *Manager) LookUpID(ip netip.Addr) (*Peer, bool) {
 			return p, true
 		}
 	}
+	return nil, false
+}
+
+func (m *Manager) LookUpByEndpoint(endpoint *net.UDPAddr) (*Peer, bool) { 
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	for _, p := range m.peers { 
+		endp := p.GetEndpoint()
+		if endp.String() == endpoint.String(){ 
+			return p, true
+		}
+	}
+
 	return nil, false
 }
 
