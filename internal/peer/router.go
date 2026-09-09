@@ -5,25 +5,29 @@ import (
 	"net/netip"
 )
 
-type Route struct{
-	Network netip.Prefix
-	PeerID ID
-}
-
-type Router struct{
-	peers Manager
-	routes []Route
-}
-
-func (r *Router) LookUpIP(ip netip.Addr) (*Peer, error) { 
-	for _, route := range r.routes {
-		if route.Network.Contains(ip) { 
-			p, ok := r.peers.Get(route.PeerID)
-			if !ok { 
-				return nil, fmt.Errorf("Peer not found")
-			}
-			return p, nil
-		}
+	type Route struct{
+		Network netip.Prefix
+		PeerID ID
 	}
-	return nil, fmt.Errorf("No route found")
-}
+
+	type Router struct{
+		peers Manager
+		routes []Route
+	}
+
+	func (r *Router) LookUpIP(ip netip.Addr) (*Peer, error) { 
+		for _, route := range r.routes {
+			if route.Network.Contains(ip) { 
+				p, ok := r.peers.Get(route.PeerID)
+				if !ok { 
+					return nil, fmt.Errorf("Peer not found")
+				}
+				return p, nil
+			}
+		}
+		return nil, fmt.Errorf("No route found")
+	}
+
+	func (r *Router) GetManager() *Manager { 
+		return &r.peers
+	}

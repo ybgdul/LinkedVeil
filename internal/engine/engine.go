@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"sync"
 
+	// "github.com/quic-go/quic-go/fuzzing/handshake"
 	"golang.org/x/net/ipv4"
 )
 
@@ -88,7 +89,30 @@ func (e *Engine) runOutBound(ctx context.Context) error {
 			continue
 		}
 
-		encrypted, err := e.cipher.Encrypt(packet)
+		session, ok := e.cipher.GetSession(p.ID)
+		if !ok { 
+			session, err := e.cipher.CreateSession(p.ID, true)
+			if err != nil { 
+				continue
+			}
+
+			handshake, err := session.WriteHandshake(nil)
+			if err != nil { 
+				continue
+			}
+			uAddr := net.UDPAddrFromAddrPort(p.GetEndpoint())
+			if err := e.transport.Send(handshake, uAddr); err != nil { 
+				continue
+			}
+
+			continue
+		}
+
+		if !session.Established() {
+			continue
+		}
+
+		encrypted, err := session.Encrypt(packet, nil)
 		if err != nil {
 			continue
 		}
@@ -121,13 +145,36 @@ func (e *Engine) runInBound(ctx context.Context) error {
 
 		packet := buf[:n]
 
-		lookUp, ok := e.router.Manager
+		p, ok := e.router.GetManager().LookUpByEndpoint(addrs)
 		if !ok { 
 			continue
 		}
 
-		decrypted, err := e.cipher.Decrypt(packet)
-		if err != nil {
+		session, ok := e.cipher.GetSession(p.ID)
+		if !ok { 
+			session, err := e.cipher.CreateSession(p.ID, true)
+			if err != nil { 
+				continue
+			}
+
+			handshake, err := session.WriteHandshake(nil)
+			if err != nil { 
+				continue
+			}
+			uAddr := net.UDPAddrFromAddrPort(p.GetEndpoint())
+			if err := e.transport.Send(handshake, uAddr); err != nil { 
+				continue
+			}
+
+			continue
+		}
+
+		if !session.Established() {
+			continue
+		}
+
+		decrypted, err := session.Decrypt(packet, nil)
+		if err != nil { 
 			continue
 		}
 
