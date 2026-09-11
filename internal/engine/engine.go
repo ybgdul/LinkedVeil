@@ -10,18 +10,17 @@ import (
 	"net/netip"
 	"sync"
 
-	// "github.com/quic-go/quic-go/fuzzing/handshake"
 	"golang.org/x/net/ipv4"
 )
 
 type Engine struct{
 	tunnel tunnel.Tunnel
 	router *peer.Router
-	cipher ciphering.CipherService
+	cipher *ciphering.CipherService
 	transport transport.UDP
 }
 
-func NewEngine(t tunnel.Tunnel, r *peer.Router, c ciphering.CipherService, tr transport.UDP) *Engine  { 
+func NewEngine(t tunnel.Tunnel, r *peer.Router, c *ciphering.CipherService, tr transport.UDP) *Engine  { 
 	return &Engine{
 		tunnel: t,
 		router: r,
