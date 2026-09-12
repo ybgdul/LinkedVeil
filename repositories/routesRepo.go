@@ -25,10 +25,10 @@ type routeRepo struct{
 	db *gorm.DB
 }
 
-func (p *routeRepo) CreateRoute(peer *peer.Route) error { 
-	var m models.PeersModel = models.PeersModel{
-		ID: string(peer.ID),
-		VirtualIP: peer.VirtualIP.String(),
+func (p *routeRepo) CreateRoute(route *peer.Route) error { 
+	var m models.RoutesModel = models.RoutesModel{
+		PeerID: string(route.PeerID),
+		Network: route.Network.String(),
 	}
 
 	return p.db.Create(m).Error
@@ -36,7 +36,7 @@ func (p *routeRepo) CreateRoute(peer *peer.Route) error {
 
 func (p *routeRepo) GetRoute(id peer.ID) (*models.RoutesModel, error) { 
 	s := string(id)
-	var m models.PeersModel
+	var m models.RoutesModel
 	if err := p.db.Find(&m, s).Error; err != nil { 
 		return nil, fmt.Errorf("can't find the peer: %w", err)
 	}
