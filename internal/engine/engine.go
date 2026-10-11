@@ -8,9 +8,13 @@ import (
 	"linkedveil/internal/tunnel"
 	"net"
 	"net/netip"
-	"sync"
 
 	"golang.org/x/net/ipv4"
+)
+
+const ( 
+	MsgTypeHandshake byte = 1
+	MsgTypeData byte = 2
 )
 
 type Engine struct{
@@ -30,14 +34,12 @@ func NewEngine(t tunnel.Tunnel, r *peer.Router, c *ciphering.CipherService, tr t
 }
 
 func (e *Engine) Run(ctx context.Context) error {
-	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	errCh := make(chan error, 2)
 
-	wg.Add(2)
-
 	go func() { 
-		defer wg.Done()
 		
 		if err := e.runOutBound(ctx); err != nil {
 			errCh <- err
@@ -45,7 +47,6 @@ func (e *Engine) Run(ctx context.Context) error {
 	}()
 
 	go func() {
-		defer wg.Done()
 
 		if err := e.runInBound(ctx); err != nil { 
 			errCh <- err
@@ -57,6 +58,7 @@ func (e *Engine) Run(ctx context.Context) error {
 		return ctx.Err()
 
 	case err := <-errCh:
+		cancel()
 		return err
 	}
 }
@@ -76,7 +78,8 @@ func (e *Engine) runOutBound(ctx context.Context) error {
 			return err
 		}
 
-		packet := buf[:n]
+		packet := make([]byte, 64*1024)
+		copy(packet, buf[:n])
 
 		destination, err := destinationIP(packet)
 		if err != nil { 
@@ -89,25 +92,26 @@ func (e *Engine) runOutBound(ctx context.Context) error {
 		}
 
 		session, ok := e.cipher.GetSession(p.ID)
-		if !ok { 
-			session, err := e.cipher.CreateSession(p.ID, true)
-			if err != nil { 
-				continue
+		if !ok || !session.Established(){ 
+			if !ok { 
+				var err error
+				session, err = e.cipher.CreateSession(p.ID, true)
+				if err != nil { 
+					continue
+				}
 			}
 
 			handshake, err := session.WriteHandshake(nil)
 			if err != nil { 
 				continue
 			}
+
+			udpPayload := append([]byte{MsgTypeHandshake}, handshake...)
 			uAddr := net.UDPAddrFromAddrPort(p.GetEndpoint())
-			if err := e.transport.Send(handshake, uAddr); err != nil { 
+			if err := e.transport.Send(udpPayload, uAddr); err != nil { 
 				continue
 			}
 
-			continue
-		}
-
-		if !session.Established() {
 			continue
 		}
 
@@ -116,12 +120,9 @@ func (e *Engine) runOutBound(ctx context.Context) error {
 			continue
 		}
 
-		if err := e.transport.Send(encrypted, 
-				&net.UDPAddr{
-					IP: p.GetEndpoint().Addr().AsSlice(),
-					Port: int(p.GetEndpoint().Port()),
-				},
-			); err != nil {
+		udpPayload := append([]byte{MsgTypeHandshake}, encrypted...)
+		uAddr := net.UDPAddrFromAddrPort(p.GetEndpoint())
+		if err := e.transport.Send(udpPayload, uAddr); err != nil { 
 			continue
 		}
 	}
@@ -142,6 +143,7 @@ func (e *Engine) runInBound(ctx context.Context) error {
 			return err
 		}
 
+		msgType := buf[0]
 		packet := buf[:n]
 
 		p, ok := e.router.GetManager().LookUpByEndpoint(addrs)
@@ -149,36 +151,47 @@ func (e *Engine) runInBound(ctx context.Context) error {
 			continue
 		}
 
-		session, ok := e.cipher.GetSession(p.ID)
-		if !ok { 
-			session, err := e.cipher.CreateSession(p.ID, true)
+		switch msgType {
+		case MsgTypeData:
+			session, ok := e.cipher.GetSession(p.ID)
+			if !ok || !session.Established() {
+				continue
+			}
+			decrypted, err := session.Decrypt(packet, nil)
 			if err != nil { 
 				continue
 			}
 
-			handshake, err := session.WriteHandshake(nil)
+			if _, err := e.tunnel.Write(decrypted); err != nil {
+				continue
+			}
+		case MsgTypeHandshake:
+			session, ok := e.cipher.GetSession(p.ID)
+
+			if !ok {
+				var err error
+				session, err = e.cipher.CreateSession(p.ID, false)
+				if err != nil {
+					continue
+				}
+			}
+
+			_, err := session.ReadHandshake(packet)
 			if err != nil { 
 				continue
 			}
-			uAddr := net.UDPAddrFromAddrPort(p.GetEndpoint())
-			if err := e.transport.Send(handshake, uAddr); err != nil { 
-				continue
+
+			if !session.Established() {
+				respHandshake, err := session.WriteHandshake(nil)
+				if err == nil {
+					udpPayload := append([]byte{MsgTypeHandshake}, respHandshake...)
+					uAddr := net.UDPAddrFromAddrPort(p.GetEndpoint())
+					if err := e.transport.Send(udpPayload, uAddr); err != nil { 
+						continue
+					}
+				}
 			}
-
-			continue
-		}
-
-		if !session.Established() {
-			continue
-		}
-
-		decrypted, err := session.Decrypt(packet, nil)
-		if err != nil { 
-			continue
-		}
-
-		if _, err := e.tunnel.Write(decrypted); err != nil {
-			continue
+		
 		}
 	}
 }

@@ -11,8 +11,15 @@ import (
 	}
 
 	type Router struct{
-		peers Manager
+		peers *Manager
 		routes []Route
+	}
+
+	func NewRouter() *Router { 
+		return &Router{
+			peers: NewManager(),
+			routes: make([]Route, 0),
+		}
 	}
 
 	func (r *Router) LookUpIP(ip netip.Addr) (*Peer, error) { 
@@ -29,5 +36,5 @@ import (
 	}
 
 	func (r *Router) GetManager() *Manager { 
-		return &r.peers
+		return r.peers
 	}

@@ -1,9 +1,25 @@
 package transport
 
-import "net"
+import (
+	"fmt"
+	"net"
+	"net/netip"
+)
 
 type UDP struct{
 	conn *net.UDPConn
+}
+
+func ListenUDPPort(port uint16) (UDP, error) {
+	addrPort := netip.AddrPortFrom(netip.Addr{}, port)
+
+	conn, err := net.ListenUDP("udp", net.UDPAddrFromAddrPort(addrPort))
+	if err != nil {
+		return UDP{}, fmt.Errorf("failed to listen on UDP port %d: %w", port, err)
+	}
+	return UDP{
+		conn: conn,
+	}, nil
 }
 
 func Listen(addr string) (*UDP, error) {
