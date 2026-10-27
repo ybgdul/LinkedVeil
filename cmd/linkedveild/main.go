@@ -2,6 +2,7 @@ package linkedveild
 
 import (
 	"context"
+	"flag"
 	"linkedveil/internal/config"
 	ciphering "linkedveil/internal/crypto"
 	"linkedveil/internal/engine"
@@ -18,7 +19,9 @@ import (
 )
 
 func main() { 
-	cfg, err := config.LoadConfig("config.toml")
+	configPath := flag.String("config", "config.toml", "Path to config file")
+	flag.Parse()
+	cfg, err := config.LoadConfig(*configPath)
 
 	if err != nil { 
 		log.Fatalf("failed to load config: %v", err)
